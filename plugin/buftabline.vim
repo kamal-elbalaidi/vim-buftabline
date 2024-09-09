@@ -38,7 +38,7 @@ hi default link BufTabLineModifiedActive  BufTabLineActive
 hi default link BufTabLineModifiedHidden  BufTabLineHidden
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
-let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
+let g:buftabline_indicators = get(g:, 'buftabline_indicators', 1)
 let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
 let g:buftabline_show       = get(g:, 'buftabline_show',       2)
 let g:buftabline_plug_max   = get(g:, 'buftabline_plug_max',  10)
@@ -87,7 +87,7 @@ function! buftabline#render()
 			let pre = screen_num
 			if getbufvar(bufnum, '&mod')
 				let tab.hilite = 'Modified' . tab.hilite
-				if show_mod | let pre = '+' . pre | endif
+				if show_mod | let pre = '●' . pre | endif
 			endif
 			if strlen(pre) | let tab.pre = pre . ' ' | endif
 			let tabs_per_tail[tab.label] = get(tabs_per_tail, tab.label, 0) + 1
@@ -95,8 +95,7 @@ function! buftabline#render()
 		elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype')) " scratch buffer
 			let tab.label = ( show_mod ? '!' . screen_num : screen_num ? screen_num . ' !' : '!' )
 		else " unnamed file
-			let tab.label = ( show_mod && getbufvar(bufnum, '&mod') ? '+' : '' )
-			\             . ( screen_num ? screen_num : '*' )
+			let tab.label = ( screen_num ? screen_num : 'No Name' ) . ( show_mod && getbufvar(bufnum, '&mod') ? ' ●' : '' )
 		endif
 		let tabs += [tab]
 	endfor
@@ -124,7 +123,7 @@ function! buftabline#render()
 	let lpad_width = strwidth(lpad)
 	for tab in tabs
 		let tab.width = lpad_width + strwidth(tab.pre) + strwidth(tab.label) + 1
-		let tab.label = lpad . tab.pre . substitute(strtrans(tab.label), '%', '%%', 'g') . ' '
+		let tab.label = lpad  . substitute(strtrans(tab.label), '%', '%%', 'g') . ' '. tab.pre
 		if centerbuf == tab.num
 			let halfwidth = tab.width / 2
 			let lft.width += halfwidth
@@ -172,16 +171,6 @@ function! buftabline#update(zombie)
 	set tabline=
 	if tabpagenr('$') > 1 | set guioptions+=e showtabline=2 | return | endif
 	set guioptions-=e
-	if 0 == g:buftabline_show
-		set showtabline=1
-		return
-	elseif 1 == g:buftabline_show
-		" account for BufDelete triggering before buffer is actually deleted
-		let bufnums = filter(buftabline#user_buffers(), 'v:val != a:zombie')
-		let &g:showtabline = 1 + ( len(bufnums) > 1 )
-	elseif 2 == g:buftabline_show
-		set showtabline=2
-	endif
 	set tabline=%!buftabline#render()
 endfunction
 
