@@ -38,7 +38,8 @@ hi default link BufTabLineModifiedActive  BufTabLineActive
 hi default link BufTabLineModifiedHidden  BufTabLineHidden
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
-let g:buftabline_indicators = get(g:, 'buftabline_indicators', 1)
+let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
+let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
 let g:buftabline_show       = get(g:, 'buftabline_show',       3)
 let g:buftabline_plug_max   = get(g:, 'buftabline_plug_max',  10)
 let g:buftabline_tab_width = 16
@@ -59,8 +60,6 @@ let s:dirsep = fnamemodify(getcwd(),':p')[-1:]
 let s:centerbuf = winbufnr(0)
 let s:tablineat = has('tablineat')
 let s:sid = s:SID() | delfunction s:SID
-
-
 
 let g:buftabline_separator = '|'
 
@@ -89,23 +88,22 @@ function! buftabline#render()
         let bufname = bufname(bufnum)
         if strlen(bufname)
             let tab.label = fnamemodify(bufname, ':t')
-        elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype')
+        elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype'))
             let tab.label = show_mod ? screen_num . ' !' : screen_num ? screen_num . ' !' : '!'
         else
             let tab.label = screen_num ? screen_num : 'No Name'
         endif
 
+        let tab.modified = ' '
         if getbufvar(bufnum, '&mod')
             let tab.hilite = 'Modified' . tab.hilite
-            let tab.modified = '● '
+            let tab.modified = '●'
         endif
 
-        let tab.label=tab.modified . tab.label
-
+        let tab.label = tab.modified .' ' . tab.label
         let available_width = g:buftabline_tab_width - 3
-
         if strwidth(tab.label) > available_width
-            let tab.label = strpart(tab.label, 0, available_width - 3) . '...'
+            let tab.label = strpart(tab.label, 0, available_width - 4) . '...'
         endif
 
         let tab.label = s:center_string(tab.label, available_width)
@@ -123,23 +121,11 @@ function! buftabline#render()
         let is_first = 0
         let tabline .= '%#BufTabLine' . tab.hilite . '#'
         let tabline .= '%' . tab.num . '@' . s:sid . 'switch_buffer@'
-        let tabline .=  substitute(tab.label, '%', '%%', 'g') 
-      endfor
+        let tabline .=  substitute(tab.label, '%', '%%', 'g') . '  '
+    endfor
 
     let tabline .= '%#BufTabLineFill#%T'
     return tabline
-endfunction
-
-function! s:switch_buffer(bufnum, clicks, button, mod)
-    execute 'buffer' a:bufnum
-endfunction
-
-function! s:switch_buffer(bufnum, clicks, button, mod)
-    execute 'buffer' a:bufnum
-endfunction
-
-function! s:switch_buffer(bufnum, clicks, button, mod)
-    execute 'buffer' a:bufnum
 endfunction
 
 function! s:switch_buffer(bufnum, clicks, button, mod)
@@ -159,8 +145,6 @@ function! buftabline#update(zombie)
 		let &g:showtabline = 1 + ( len(bufnums) > 1 )
 	elseif 2 == g:buftabline_show
 		set showtabline=2
-  else
-		set showtabline=0
 	endif
 	set tabline=%!buftabline#render()
 endfunction
@@ -194,4 +178,3 @@ if v:version < 703
 	exe "delfunction buftabline#render\n" . s:transpile()
 	delfunction s:transpile
 endif
-
