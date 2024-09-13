@@ -39,9 +39,9 @@ hi default link BufTabLineModifiedHidden  BufTabLineHidden
 
 let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
 let g:buftabline_indicators = get(g:, 'buftabline_indicators', 1)
-let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
-let g:buftabline_show       = get(g:, 'buftabline_show',       2)
+let g:buftabline_show       = get(g:, 'buftabline_show',       3)
 let g:buftabline_plug_max   = get(g:, 'buftabline_plug_max',  10)
+let g:buftabline_tab_width = 16
 
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
@@ -59,118 +59,109 @@ let s:dirsep = fnamemodify(getcwd(),':p')[-1:]
 let s:centerbuf = winbufnr(0)
 let s:tablineat = has('tablineat')
 let s:sid = s:SID() | delfunction s:SID
+
+
+
+let g:buftabline_separator = '|'
+
+function! s:center_string(str, width)
+    let spaces = a:width - strwidth(a:str)
+    let left_spaces = spaces / 2
+    let right_spaces = spaces - left_spaces
+    return repeat(' ', left_spaces) . a:str . repeat(' ', right_spaces)
+endfunction
+
 function! buftabline#render()
-	let show_num = g:buftabline_numbers == 1
-	let show_ord = g:buftabline_numbers == 2
-	let show_mod = g:buftabline_indicators
-	let lpad     = g:buftabline_separators ? nr2char(0x23B8) : ' '
+    let show_num = g:buftabline_numbers == 1
+    let show_ord = g:buftabline_numbers == 2
+    let show_mod = g:buftabline_indicators
 
-	let bufnums = buftabline#user_buffers()
-	let centerbuf = s:centerbuf " prevent tabline jumping around when non-user buffer current (e.g. help)
+    let bufnums = buftabline#user_buffers()
+    let currentbuf = winbufnr(0)
 
-	" pick up data on all the buffers
-	let tabs = []
-	let path_tabs = []
-	let tabs_per_tail = {}
-	let currentbuf = winbufnr(0)
-	let screen_num = 0
-	for bufnum in bufnums
-		let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
-		let tab = { 'num': bufnum, 'pre': '' }
-		let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
-		if currentbuf == bufnum | let [centerbuf, s:centerbuf] = [bufnum, bufnum] | endif
-		let bufpath = bufname(bufnum)
-		if strlen(bufpath)
-			let tab.path = fnamemodify(bufpath, ':p:~:.')
-			let tab.sep = strridx(tab.path, s:dirsep, strlen(tab.path) - 2) " keep trailing dirsep
-			let tab.label = tab.path[tab.sep + 1:]
-			let pre = screen_num
-			if getbufvar(bufnum, '&mod')
-				let tab.hilite = 'Modified' . tab.hilite
-				if show_mod | let pre = '●' . pre | endif
-			endif
-			if strlen(pre) | let tab.pre = pre . ' ' | endif
-			let tabs_per_tail[tab.label] = get(tabs_per_tail, tab.label, 0) + 1
-			let path_tabs += [tab]
-		elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype')) " scratch buffer
-			let tab.label = ( show_mod ? '!' . screen_num : screen_num ? screen_num . ' !' : '!' )
-		else " unnamed file
-			let tab.label = ( screen_num ? screen_num : 'No Name' ) . ( show_mod && getbufvar(bufnum, '&mod') ? ' ●' : '' )
-		endif
-		let tabs += [tab]
-	endfor
+    let tabs = []
+    let screen_num = 0
+    for bufnum in bufnums
+        let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
+        let tab = { 'num': bufnum, 'label': '', 'modified': ' ' }
+        let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
+        
+        let bufname = bufname(bufnum)
+        if strlen(bufname)
+            let tab.label = fnamemodify(bufname, ':t')
+        elseif -1 < index(['nofile','acwrite'], getbufvar(bufnum, '&buftype')
+            let tab.label = show_mod ? screen_num . ' !' : screen_num ? screen_num . ' !' : '!'
+        else
+            let tab.label = screen_num ? screen_num : 'No Name'
+        endif
 
-	" disambiguate same-basename files by adding trailing path segments
-	while len(filter(tabs_per_tail, 'v:val > 1'))
-		let [ambiguous, tabs_per_tail] = [tabs_per_tail, {}]
-		for tab in path_tabs
-			if -1 < tab.sep && has_key(ambiguous, tab.label)
-				let tab.sep = strridx(tab.path, s:dirsep, tab.sep - 1)
-				let tab.label = tab.path[tab.sep + 1:]
-			endif
-			let tabs_per_tail[tab.label] = get(tabs_per_tail, tab.label, 0) + 1
-		endfor
-	endwhile
+        if getbufvar(bufnum, '&mod')
+            let tab.hilite = 'Modified' . tab.hilite
+            let tab.modified = '● '
+        endif
 
-	" now keep the current buffer center-screen as much as possible:
+        let tab.label=tab.modified . tab.label
 
-	" 1. setup
-	let lft = { 'lasttab':  0, 'cut':  '.', 'indicator': '<', 'width': 0, 'half': &columns / 2 }
-	let rgt = { 'lasttab': -1, 'cut': '.$', 'indicator': '>', 'width': 0, 'half': &columns - lft.half }
+        let available_width = g:buftabline_tab_width - 3
 
-	" 2. sum the string lengths for the left and right halves
-	let currentside = lft
-	let lpad_width = strwidth(lpad)
-	for tab in tabs
-		let tab.width = lpad_width + strwidth(tab.pre) + strwidth(tab.label) + 1
-		let tab.label = lpad  . substitute(strtrans(tab.label), '%', '%%', 'g') . ' '. tab.pre
-		if centerbuf == tab.num
-			let halfwidth = tab.width / 2
-			let lft.width += halfwidth
-			let rgt.width += tab.width - halfwidth
-			let currentside = rgt
-			continue
-		endif
-		let currentside.width += tab.width
-	endfor
-	if currentside is lft " centered buffer not seen?
-		" then blame any overflow on the right side, to protect the left
-		let [lft.width, rgt.width] = [0, lft.width]
-	endif
+        if strwidth(tab.label) > available_width
+            let tab.label = strpart(tab.label, 0, available_width - 3) . '...'
+        endif
 
-	" 3. toss away tabs and pieces until all fits:
-	if ( lft.width + rgt.width ) > &columns
-		let oversized
-		\ = lft.width < lft.half ? [ [ rgt, &columns - lft.width ] ]
-		\ : rgt.width < rgt.half ? [ [ lft, &columns - rgt.width ] ]
-		\ :                        [ [ lft, lft.half ], [ rgt, rgt.half ] ]
-		for [side, budget] in oversized
-			let delta = side.width - budget
-			" toss entire tabs to close the distance
-			while delta >= tabs[side.lasttab].width
-				let delta -= remove(tabs, side.lasttab).width
-			endwhile
-			" then snip at the last one to make it fit
-			let endtab = tabs[side.lasttab]
-			while delta > ( endtab.width - strwidth(strtrans(endtab.label)) )
-				let endtab.label = substitute(endtab.label, side.cut, '', '')
-			endwhile
-			let endtab.label = substitute(endtab.label, side.cut, side.indicator, '')
-		endfor
-	endif
+        let tab.label = s:center_string(tab.label, available_width)
 
-	if len(tabs) | let tabs[0].label = substitute(tabs[0].label, lpad, ' ', '') | endif
+        let tabs += [tab]
+    endfor
 
-	let swallowclicks = '%'.(1 + tabpagenr('$')).'X'
-	return s:tablineat
-		\ ? join(map(tabs,'"%#BufTabLine".v:val.hilite."#" . "%".v:val.num."@'.s:sid.'switch_buffer@" . strtrans(v:val.label)'),'') . '%#BufTabLineFill#' . swallowclicks
-		\ : swallowclicks . join(map(tabs,'"%#BufTabLine".v:val.hilite."#" . strtrans(v:val.label)'),'') . '%#BufTabLineFill#'
+    let tabline = ''
+    let separator = '%#BufTabLineFill#' . g:buftabline_separator
+    let is_first = 1
+    for tab in tabs
+        if !is_first
+            let tabline .= separator
+        endif
+        let is_first = 0
+        let tabline .= '%#BufTabLine' . tab.hilite . '#'
+        let tabline .= '%' . tab.num . '@' . s:sid . 'switch_buffer@'
+        let tabline .=  substitute(tab.label, '%', '%%', 'g') 
+      endfor
+
+    let tabline .= '%#BufTabLineFill#%T'
+    return tabline
+endfunction
+
+function! s:switch_buffer(bufnum, clicks, button, mod)
+    execute 'buffer' a:bufnum
+endfunction
+
+function! s:switch_buffer(bufnum, clicks, button, mod)
+    execute 'buffer' a:bufnum
+endfunction
+
+function! s:switch_buffer(bufnum, clicks, button, mod)
+    execute 'buffer' a:bufnum
+endfunction
+
+function! s:switch_buffer(bufnum, clicks, button, mod)
+    execute 'buffer' a:bufnum
 endfunction
 
 function! buftabline#update(zombie)
 	set tabline=
 	if tabpagenr('$') > 1 | set guioptions+=e showtabline=2 | return | endif
 	set guioptions-=e
+	if 0 == g:buftabline_show
+		set showtabline=1
+		return
+	elseif 1 == g:buftabline_show
+		" account for BufDelete triggering before buffer is actually deleted
+		let bufnums = filter(buftabline#user_buffers(), 'v:val != a:zombie')
+		let &g:showtabline = 1 + ( len(bufnums) > 1 )
+	elseif 2 == g:buftabline_show
+		set showtabline=2
+  else
+		set showtabline=0
+	endif
 	set tabline=%!buftabline#render()
 endfunction
 
@@ -203,3 +194,4 @@ if v:version < 703
 	exe "delfunction buftabline#render\n" . s:transpile()
 	delfunction s:transpile
 endif
+
