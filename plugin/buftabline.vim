@@ -133,7 +133,7 @@ function! buftabline#render()
             continue
         endif
         let currentside.width += tab.width
-        let currentside.width += strwidth(g:buftabline_separator)
+        let currentside.width += strwidth(g:buftabline_separator)+1
       endfor
 
     " Trim tabs if they exceed screen width
