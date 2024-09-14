@@ -37,12 +37,14 @@ hi default link BufTabLineModifiedCurrent BufTabLineCurrent
 hi default link BufTabLineModifiedActive  BufTabLineActive
 hi default link BufTabLineModifiedHidden  BufTabLineHidden
 
-let g:buftabline_numbers    = get(g:, 'buftabline_numbers',    0)
-let g:buftabline_indicators = get(g:, 'buftabline_indicators', 0)
-let g:buftabline_separators = get(g:, 'buftabline_separators', 0)
-let g:buftabline_show       = get(g:, 'buftabline_show',       3)
-let g:buftabline_plug_max   = get(g:, 'buftabline_plug_max',  10)
-let g:buftabline_tab_width = 16
+let g:buftabline_numbers       = get(g:, 'buftabline_numbers',        0)
+let g:buftabline_indicators    = get(g:, 'buftabline_indicators',     1)
+let g:buftabline_separators    = get(g:, 'buftabline_separators',     0)
+let g:buftabline_show          = get(g:, 'buftabline_show',           3)
+let g:buftabline_plug_max      = get(g:, 'buftabline_plug_max',      10)
+let g:buftabline_tab_width     = get(g:, 'buftabline_tab_width',     20)
+let g:buftabline_separator     = get(g:, 'buftabline_separator',    '|')
+let g:buftabline_mark_modified = get(g:, 'buftabline_mark_modified','+')
 
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
@@ -60,9 +62,6 @@ let s:dirsep = fnamemodify(getcwd(),':p')[-1:]
 let s:centerbuf = winbufnr(0)
 let s:tablineat = has('tablineat')
 let s:sid = s:SID() | delfunction s:SID
-
-let g:buftabline_separator = '|'
-
 function! s:center_string(str, width)
     let spaces = a:width - strwidth(a:str)
     let left_spaces = spaces / 2
@@ -74,16 +73,21 @@ function! buftabline#render()
     let show_num = g:buftabline_numbers == 1
     let show_ord = g:buftabline_numbers == 2
     let show_mod = g:buftabline_indicators
+    let tab_width = g:buftabline_tab_width
+    let lpad = g:buftabline_separators ? nr2char(0x23B8) : ' '
 
     let bufnums = buftabline#user_buffers()
+    let centerbuf = s:centerbuf
     let currentbuf = winbufnr(0)
-
     let tabs = []
     let screen_num = 0
+
     for bufnum in bufnums
         let screen_num = show_num ? bufnum : show_ord ? screen_num + 1 : ''
-        let tab = { 'num': bufnum, 'label': '', 'modified': ' ' }
+        let tab = { 'num': bufnum, 'label': '', 'pre': '', 'width': 0 }
         let tab.hilite = currentbuf == bufnum ? 'Current' : bufwinnr(bufnum) > 0 ? 'Active' : 'Hidden'
+        
+        if currentbuf == bufnum | let [centerbuf, s:centerbuf] = [bufnum, bufnum] | endif
         
         let bufname = bufname(bufnum)
         if strlen(bufname)
@@ -94,42 +98,76 @@ function! buftabline#render()
             let tab.label = screen_num ? screen_num : 'No Name'
         endif
 
-        let tab.modified = ' '
+        let pre = screen_num
         if getbufvar(bufnum, '&mod')
             let tab.hilite = 'Modified' . tab.hilite
-            let tab.modified = '●'
-        endif
+            if show_mod | let pre = g:buftabline_mark_modified . pre | endif
+            let tab_width -=strwidth(pre)+1
+          endif
 
-        let tab.label = tab.modified .' ' . tab.label
-        let available_width = g:buftabline_tab_width - 3
+        if strlen(pre) | let tab.pre = pre . ' ' | endif
+
+        let available_width = tab_width - 2  " -2 for padding
         if strwidth(tab.label) > available_width
-            let tab.label = strpart(tab.label, 0, available_width - 4) . '...'
+            let tab.label = strpart(tab.label, 0, available_width - 3) . '...'
         endif
-
         let tab.label = s:center_string(tab.label, available_width)
 
         let tabs += [tab]
     endfor
 
+    " Center the current buffer
+    let lft = { 'lasttab': 0, 'cut': '.', 'indicator': '<', 'width': 0, 'half': &columns / 2 }
+    let rgt = { 'lasttab': -1, 'cut': '.$', 'indicator': '>', 'width': 0, 'half': &columns - lft.half }
+    
+    let currentside = lft
+    let lpad_width = strwidth(lpad)
+    for tab in tabs
+        let tab.width = lpad_width + strwidth(tab.pre) + strwidth(tab.label) + 1
+        let tab.label = lpad . tab.pre . substitute(strtrans(tab.label), '%', '%%', 'g') . ' '
+        if centerbuf == tab.num
+            let halfwidth = tab.width / 2
+            let lft.width += halfwidth
+            let rgt.width += tab.width - halfwidth
+            let currentside = rgt
+            continue
+        endif
+        let currentside.width += tab.width
+        let currentside.width += strwidth(g:buftabline_separator)
+      endfor
+
+    " Trim tabs if they exceed screen width
+    if (lft.width + rgt.width) > &columns
+        let oversized = lft.width < lft.half ? [ [ rgt, &columns - lft.width ] ] :
+                        \ rgt.width < rgt.half ? [ [ lft, &columns - rgt.width ] ] :
+                        \ [ [ lft, lft.half ], [ rgt, rgt.half ] ]
+        for [side, budget] in oversized
+            let delta = side.width - budget
+            while delta >= tabs[side.lasttab].width
+                let delta -= remove(tabs, side.lasttab).width
+            endwhile
+            let endtab = tabs[side.lasttab]
+            while delta > (endtab.width - strwidth(strtrans(endtab.label)))
+                let endtab.label = substitute(endtab.label, side.cut, '', '')
+            endwhile
+            let endtab.label = substitute(endtab.label, side.cut, side.indicator, '')
+        endfor
+    endif
+
+    if len(tabs) | let tabs[0].label = substitute(tabs[0].label, lpad, ' ', '') | endif
+
     let tabline = ''
     let separator = '%#BufTabLineFill#' . g:buftabline_separator
-    let is_first = 1
+
     for tab in tabs
-        if !is_first
-            let tabline .= separator
-        endif
-        let is_first = 0
-        let tabline .= '%#BufTabLine' . tab.hilite . '#'
+        let tabline .= '%#BufTabLine'  . tab.hilite . '#'
         let tabline .= '%' . tab.num . '@' . s:sid . 'switch_buffer@'
-        let tabline .=  substitute(tab.label, '%', '%%', 'g') . '  '
+        let tabline .= substitute(tab.label, '%', '%%', 'g')  .separator
     endfor
 
     let tabline .= '%#BufTabLineFill#%T'
     return tabline
-endfunction
-
-function! s:switch_buffer(bufnum, clicks, button, mod)
-    execute 'buffer' a:bufnum
+    " return tabline .g:buftabline_separator 
 endfunction
 
 function! buftabline#update(zombie)
