@@ -32,7 +32,7 @@ A well-integrated, low-configuration buffer list that lives in the tabline, Fork
       vim.api.nvim_set_keymap('n', '<leader>th', ':bp<cr>', { noremap = true, silent = true })
       vim.api.nvim_set_keymap('n', '<leader>tl', ':bn<cr>', { noremap = true, silent = true })
       vim.api.nvim_set_keymap('n', '<leader>tx', ':bd<cr>', { noremap = true, silent = true })
-
+    end
 ```
 #### Customizing Colors
 
