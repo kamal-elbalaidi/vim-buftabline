@@ -39,12 +39,14 @@ hi default link BufTabLineModifiedHidden  BufTabLineHidden
 
 let g:buftabline_numbers       = get(g:, 'buftabline_numbers',        0)
 let g:buftabline_indicators    = get(g:, 'buftabline_indicators',     1)
-let g:buftabline_separators    = get(g:, 'buftabline_separators',     0)
+let g:buftabline_separators    = get(g:, 'buftabline_separators',     1)
 let g:buftabline_show          = get(g:, 'buftabline_show',           3)
 let g:buftabline_plug_max      = get(g:, 'buftabline_plug_max',      10)
 let g:buftabline_tab_width     = get(g:, 'buftabline_tab_width',     20)
 let g:buftabline_separator     = get(g:, 'buftabline_separator',    '|')
 let g:buftabline_mark_modified = get(g:, 'buftabline_mark_modified','+')
+let g:buftabline_mark_left     = get(g:, 'buftabline_mark_left',    '<')
+let g:buftabline_mark_right    = get(g:, 'buftabline_mark_right',   '>')
 
 function! buftabline#user_buffers() " help buffers are always unlisted, but quickfix buffers are not
 	return filter(range(1,bufnr('$')),'buflisted(v:val) && "quickfix" !=? getbufvar(v:val, "&buftype")')
@@ -74,8 +76,7 @@ function! buftabline#render()
     let show_ord = g:buftabline_numbers == 2
     let show_mod = g:buftabline_indicators
     let tab_width = g:buftabline_tab_width
-    let lpad = g:buftabline_separators ? nr2char(0x23B8) : ' '
-
+    let lpad =g:buftabline_separators ? g:buftabline_separator : ' '
     let bufnums = buftabline#user_buffers()
     let centerbuf = s:centerbuf
     let currentbuf = winbufnr(0)
@@ -117,8 +118,8 @@ function! buftabline#render()
     endfor
 
     " Center the current buffer
-    let lft = { 'lasttab': 0, 'cut': '.', 'indicator': '<', 'width': 0, 'half': &columns / 2 }
-    let rgt = { 'lasttab': -1, 'cut': '.$', 'indicator': '>', 'width': 0, 'half': &columns - lft.half }
+    let lft = { 'lasttab': 0, 'cut': '.', 'indicator': g:buftabline_mark_left, 'width': 0, 'half': &columns / 2 }
+    let rgt = { 'lasttab': -1, 'cut': '.$', 'indicator': g:buftabline_mark_right, 'width': 0, 'half': &columns - lft.half }
     
     let currentside = lft
     let lpad_width = strwidth(lpad)
@@ -133,7 +134,6 @@ function! buftabline#render()
             continue
         endif
         let currentside.width += tab.width
-        let currentside.width += strwidth(g:buftabline_separator)+1
       endfor
 
     " Trim tabs if they exceed screen width
@@ -157,7 +157,7 @@ function! buftabline#render()
     if len(tabs) | let tabs[0].label = substitute(tabs[0].label, lpad, ' ', '') | endif
 
     let tabline = ''
-    let separator = '%#BufTabLineFill#' . g:buftabline_separator
+    let separator = '%#BufTabLineFill#'
 
     for tab in tabs
         let tabline .= '%#BufTabLine'  . tab.hilite . '#'
@@ -167,7 +167,6 @@ function! buftabline#render()
 
     let tabline .= '%#BufTabLineFill#%T'
     return tabline
-    " return tabline .g:buftabline_separator 
 endfunction
 
 function! buftabline#update(zombie)
