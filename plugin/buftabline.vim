@@ -103,10 +103,12 @@ function! buftabline#render()
         if getbufvar(bufnum, '&mod')
             let tab.hilite = 'Modified' . tab.hilite
             if show_mod | let pre = g:buftabline_mark_modified . pre | endif
-            let tab_width -=strwidth(pre)+1
           endif
-
-        if strlen(pre) | let tab.pre = pre . ' ' | endif
+          if strlen(pre)
+            let tab.pre =''. pre  
+          else
+            let tab.pre =' '. pre
+          endif
 
         let available_width = tab_width - 2  " -2 for padding
         if strwidth(tab.label) > available_width
