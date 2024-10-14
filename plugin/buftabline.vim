@@ -114,7 +114,7 @@ function! buftabline#render()
         if strwidth(tab.label) > available_width
             let tab.label = strpart(tab.label, 0, available_width - 3) . '...'
         endif
-        let tab.label = s:center_string(tab.label, available_width)
+        let tab.label = ' '.s:center_string(tab.label, available_width).' '
 
         let tabs += [tab]
     endfor
